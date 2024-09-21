@@ -5,6 +5,8 @@ import { config } from './config/config';
 import { getGmailOAuthClient, getOutlookOAuthClient, outlookScopes } from './utils/oauthHelper';
 import { google } from 'googleapis';
 import cors from 'cors';
+import { EmailProcessor } from './services/emailProcessor';
+
 
 const app = express();
 
@@ -120,24 +122,41 @@ app.post('/process-emails', async (req, res) => {
 
 
 app.get('/categorized-emails', async (req, res) => {
-    const jobs = await emailQueue.getCompleted();
-    if (jobs.length === 0) {
-        return res.json({ message: 'No processed emails available' });
+    const gmailAccessToken = req.query.gmailAccessToken as string;
+    const outlookAccessToken = req.query.outlookAccessToken as string;
+
+    interface CategorizedEmail {
+        id: string;
+        subject: string;
+        from: string;
+        body?: string;
+        snippet?: string;
+        category: string;
+        service: 'gmail' | 'outlook';
     }
 
-    const latestJob = jobs[jobs.length - 1];
-    const categorizedEmails = latestJob.returnvalue;
+    let categorizedEmails: CategorizedEmail[] = [];
+
+    if (gmailAccessToken) {
+        const gmailProcessor = new EmailProcessor(gmailAccessToken, '');
+        const gmailEmails = await gmailProcessor.getCategorizedEmails('gmail');
+        categorizedEmails = [...categorizedEmails, ...gmailEmails];
+    }
+
+    if (outlookAccessToken) {
+        const outlookProcessor = new EmailProcessor('', outlookAccessToken);
+        const outlookEmails = await outlookProcessor.getCategorizedEmails('outlook');
+        categorizedEmails = [...categorizedEmails, ...outlookEmails];
+    }
 
     res.json({
         message: 'Categorized emails retrieved successfully',
-        jobId: latestJob.id,
-        completedAt: latestJob.finishedOn,
-        categories: categorizedEmails
+        emails: categorizedEmails
     });
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+

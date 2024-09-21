@@ -37,78 +37,117 @@
     <h2>Test Services</h2>
     <button onclick="testService('gmail')">Test Gmail Service</button>
     <button onclick="testService('outlook')">Test Outlook Service</button>
+      <h2>Output</h2>
+      <div id="output"></div>
 
-    <h2>Output</h2>
-    <div id="output"></div>
+      <h2>View Categorized Emails</h2>
+      <button onclick="viewCategorizedEmails()">View Emails</button>
 
-    <script>
-        let authWindow = null;
+      <h2>Categorized Emails</h2>
+      <div id="emailsContainer"></div>
+        <script>
+            let authWindow = null;
 
-        async function initiateOAuth(service) {
-            try {
-                const response = await fetch(`/auth/${service}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                authWindow = window.open(data.authUrl, '_blank', 'width=600,height=600');
-                
-                window.addEventListener('message', function(event) {
-                    if (event.data === `${service}Authenticated`) {
-                        if (authWindow) {
-                            authWindow.close();
-                        }
-                        log(`${service} authentication completed`);
+            async function initiateOAuth(service) {
+                try {
+                    const response = await fetch(`/auth/${service}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
-                }, false);
-            } catch (error) {
-                log(`Error initiating OAuth for ${service}: ${error.message}`);
+                    const data = await response.json();
+                    authWindow = window.open(data.authUrl, '_blank', 'width=600,height=600');
+                
+                    window.addEventListener('message', function(event) {
+                        if (event.data === `${service}Authenticated`) {
+                            if (authWindow) {
+                                authWindow.close();
+                            }
+                            log(`${service} authentication completed`);
+                        }
+                    }, false);
+                } catch (error) {
+                    log(`Error initiating OAuth for ${service}: ${error.message}`);
+                }
             }
-        }
 
-        async function processEmails() {
-            try {
-                const response = await fetch('/process-emails', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        gmailAccessToken: localStorage.getItem('gmailAccessToken'),
-                        outlookAccessToken: localStorage.getItem('outlookAccessToken'),
-                    }),
+            async function processEmails() {
+                try {
+                    const response = await fetch('/process-emails', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            gmailAccessToken: localStorage.getItem('gmailAccessToken'),
+                            outlookAccessToken: localStorage.getItem('outlookAccessToken'),
+                        }),
+                    });
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    log(data.message);
+                } catch (error) {
+                    log('Error processing emails: ' + error.message);
+                }
+            }
+
+            async function testService(service) {
+                try {
+                    const accessToken = localStorage.getItem(`${service}AccessToken`);
+                    if (!accessToken) {
+                        throw new Error(`No access token found for ${service}`);
+                    }
+                    const response = await fetch(`/test-${service}?accessToken=${encodeURIComponent(accessToken)}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    log(`${service} test: ${data.message}. Emails fetched: ${data.count}`);
+                } catch (error) {
+                    log(`Error testing ${service}: ` + error.message);
+                }
+            }
+
+            function log(message) {
+                const output = document.getElementById('output');
+                output.innerHTML += message + '<br>';
+            }
+
+            async function viewCategorizedEmails() {
+                try {
+                    const gmailAccessToken = localStorage.getItem('gmailAccessToken');
+                    const outlookAccessToken = localStorage.getItem('outlookAccessToken');
+                  
+                    const response = await fetch(`/categorized-emails?gmailAccessToken=${encodeURIComponent(gmailAccessToken || '')}&outlookAccessToken=${encodeURIComponent(outlookAccessToken || '')}`);
+                  
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                  
+                    const data = await response.json();
+                    displayEmails(data.emails);
+                } catch (error) {
+                    log('Error fetching categorized emails: ' + error.message);
+                }
+            }
+
+            function displayEmails(emails) {
+                const container = document.getElementById('emailsContainer');
+                container.innerHTML = '';
+              
+                emails.forEach(email => {
+                    const emailDiv = document.createElement('div');
+                    emailDiv.innerHTML = `
+                        <h3>${email.subject}</h3>
+                        <p>From: ${email.from}</p>
+                        <p>Category: ${email.category}</p>
+                        <p>${email.snippet || email.body}</p>
+                        <hr>
+                    `;
+                    container.appendChild(emailDiv);
                 });
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                log(data.message);
-            } catch (error) {
-                log('Error processing emails: ' + error.message);
             }
-        }
-
-        async function testService(service) {
-            try {
-                const accessToken = localStorage.getItem(`${service}AccessToken`);
-                if (!accessToken) {
-                    throw new Error(`No access token found for ${service}`);
-                }
-                const response = await fetch(`/test-${service}?accessToken=${encodeURIComponent(accessToken)}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                log(`${service} test: ${data.message}. Emails fetched: ${data.count}`);
-            } catch (error) {
-                log(`Error testing ${service}: ` + error.message);
-            }
-        }
-
-        function log(message) {
-            const output = document.getElementById('output');
-            output.innerHTML += message + '<br>';
-        }
-    </script>
-</body>
+        </script>
+    </body>
 </html>

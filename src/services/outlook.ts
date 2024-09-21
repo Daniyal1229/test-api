@@ -8,7 +8,12 @@ export class OutlookService {
 
     constructor(accessToken: string) {
         const authProvider = {
-            getAccessToken: async () => accessToken
+            getAccessToken: async () => {
+                if (!accessToken) {
+                    throw new Error('No Outlook access token provided');
+                }
+                return accessToken;
+            }
         };
 
         this.client = Client.initWithMiddleware({
