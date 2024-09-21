@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Automation Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            margin: 10px 0;
+            padding: 10px;
+            cursor: pointer;
+        }
+        #output {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Email Automation Tool</h1>
+
+    <h2>OAuth</h2>
+    <button onclick="initiateOAuth('gmail')">Connect Gmail</button>
+    <button onclick="initiateOAuth('outlook')">Connect Outlook</button>
+
+    <h2>Email Processing</h2>
+    <button onclick="processEmails()">Process Emails</button>
+
+    <h2>Test Services</h2>
+    <button onclick="testService('gmail')">Test Gmail Service</button>
+    <button onclick="testService('outlook')">Test Outlook Service</button>
+
+    <h2>Output</h2>
+    <div id="output"></div>
+
+    <script>
+        let authWindow = null;
+
+        async function initiateOAuth(service) {
+            try {
+                const response = await fetch(`/auth/${service}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                authWindow = window.open(data.authUrl, '_blank', 'width=600,height=600');
+                
+                window.addEventListener('message', function(event) {
+                    if (event.data === `${service}Authenticated`) {
+                        if (authWindow) {
+                            authWindow.close();
+                        }
+                        log(`${service} authentication completed`);
+                    }
+                }, false);
+            } catch (error) {
+                log(`Error initiating OAuth for ${service}: ${error.message}`);
+            }
+        }
+
+        async function processEmails() {
+            try {
+                const response = await fetch('/process-emails', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        gmailAccessToken: localStorage.getItem('gmailAccessToken'),
+                        outlookAccessToken: localStorage.getItem('outlookAccessToken'),
+                    }),
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                log(data.message);
+            } catch (error) {
+                log('Error processing emails: ' + error.message);
+            }
+        }
+
+        async function testService(service) {
+            try {
+                const accessToken = localStorage.getItem(`${service}AccessToken`);
+                if (!accessToken) {
+                    throw new Error(`No access token found for ${service}`);
+                }
+                const response = await fetch(`/test-${service}?accessToken=${encodeURIComponent(accessToken)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                log(`${service} test: ${data.message}. Emails fetched: ${data.count}`);
+            } catch (error) {
+                log(`Error testing ${service}: ` + error.message);
+            }
+        }
+
+        function log(message) {
+            const output = document.getElementById('output');
+            output.innerHTML += message + '<br>';
+        }
+    </script>
+</body>
+</html>
